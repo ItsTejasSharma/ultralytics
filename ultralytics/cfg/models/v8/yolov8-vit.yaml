@@ -1,5 +1,5 @@
 # YOLOv8-ViT-B/16
-# Uses ViT-B/16 as the backbone with FPN-style feature fusion
+# Uses ViT-B/16 as a backbone with FPN-style feature fusion
 
 nc: 2  # Number of classes
 strides: [8, 16, 32]  # Output strides
@@ -11,14 +11,11 @@ scales:
   x: [1.00, 1.25, 512]
 
 backbone:
-  # [from, repeats, module, args]
   - [-1, 1, TorchVision, [768, 'vit_b_16', DEFAULT, True, 12, True]]  # 0 - ViT-B/16 Backbone
-
-  # Remove CLS token (Token 0) and reshape (B, 196, 768) → (B, 768, 14, 14)
-  - [0, 1, Slice, [1, None]]                                          # 1 - Remove CLS token (B, 196, 768)
+  - [0, 1, RemoveCLS, []]                                             # 1 - Remove CLS token (B, 196, 768)
   - [-1, 1, Reshape, [-1, 768, 14, 14]]                               # 2 - Reshape to (B, 768, 14, 14)
 
-  # Upsample to create P3, P4, P5 feature maps
+  # Upsample for P3, P4, P5
   - [-1, 1, nn.Upsample, [None, 4, "nearest"]]                        # 3 - P3/8  (B, 768, 56, 56)
   - [-1, 1, Conv, [384, 3, 1]]                                        # 4 - Reduce channels (B, 384, 56, 56)
   - [-1, 1, nn.Upsample, [None, 1.5, "nearest"]]                      # 5 - P3/8  (B, 384, 80, 80)
@@ -33,21 +30,20 @@ backbone:
   - [-1, 1, SPPF, [768, 5]]                                           # 11 - P5/32 (B, 768, 20, 20)
 
 head:
-  # [from, repeats, module, args]
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]                        # 12 - (B, 768, 40, 40)
-  - [[-1, 8], 1, Concat, [1]]                                         # 13 - (B, 768+512, 40, 40) = (B, 1280, 40, 40)
+  - [[-1, 8], 1, Concat, [1]]                                         # 13 - (B, 768+512, 40, 40)
   - [-1, 3, C2f, [512, True]]                                         # 14 - (B, 512, 40, 40)
 
   - [-1, 1, nn.Upsample, [None, 2, "nearest"]]                        # 15 - (B, 512, 80, 80)
-  - [[-1, 5], 1, Concat, [1]]                                         # 16 - (B, 512+384, 80, 80) = (B, 896, 80, 80)
+  - [[-1, 5], 1, Concat, [1]]                                         # 16 - (B, 512+384, 80, 80)
   - [-1, 3, C2f, [384, True]]                                         # 17 - (B, 384, 80, 80)
 
   - [-1, 1, Conv, [384, 3, 2]]                                        # 18 - (B, 384, 40, 40)
-  - [[-1, 14], 1, Concat, [1]]                                        # 19 - (B, 384+512, 40, 40) = (B, 896, 40, 40)
+  - [[-1, 14], 1, Concat, [1]]                                        # 19 - (B, 384+512, 40, 40)
   - [-1, 3, C2f, [512, True]]                                         # 20 - (B, 512, 40, 40)
 
   - [-1, 1, Conv, [512, 3, 2]]                                        # 21 - (B, 512, 20, 20)
-  - [[-1, 11], 1, Concat, [1]]                                        # 22 - (B, 512+768, 20, 20) = (B, 1280, 20, 20)
+  - [[-1, 11], 1, Concat, [1]]                                        # 22 - (B, 512+768, 20, 20)
   - [-1, 3, C2f, [768, True]]                                         # 23 - (B, 768, 20, 20)
 
   - [[17, 20, 23], 1, Detect, [nc]]                                   # 24 - Detect(P3, P4, P5)
