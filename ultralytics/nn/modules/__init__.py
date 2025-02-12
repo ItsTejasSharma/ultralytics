@@ -160,4 +160,5 @@ __all__ = (
     "PSA",
     "TorchVision",
     "Index",
+    "EfficientNetB0Extractor",
 )
