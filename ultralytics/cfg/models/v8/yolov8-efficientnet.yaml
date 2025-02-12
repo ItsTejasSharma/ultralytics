@@ -1,0 +1,35 @@
+# YOLOv8 EfficientNet-B0 Backbone
+
+# Parameters
+nc: 2  # Number of classes
+depth_multiple: 0.33  # Adjust as needed
+width_multiple: 0.25  # Adjust as needed
+
+# Backbone (EfficientNet-B0)
+backbone:
+  # [from, number, module, args]
+  - [-1, 1, Conv, [32, 3, 2]]  # 0-P1/2 (Initial Conv, adapts input)
+  - [-1, 1, EfficientNetB0Extractor, [True]]  # 1 (Our extractor, True for pretrained)
+
+# Head (Modified for EfficientNet's output channels)
+head:
+  # [from, number, module, args]
+  - [2, 1, SPPF, [int(1280* width_multiple), 5]]  # 2, use 1280 directly
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]  # 3
+  - [[-1, 1], 1, Concat, [1]] # 4, connect to P4 from EfficientNetExtractor index 1
+  - [-1, 3, C2f, [int(112 * width_multiple), True]]  # 5,  P4
+
+  - [-1, 1, nn.Upsample, [None, 2, 'nearest']]  # 6
+  - [[-1, 0], 1, Concat, [1]] # 7, connect to P3 from EfficientNetExtractor index 0
+  - [-1, 3, C2f, [int(40 * width_multiple), True]]   # 8, P3
+
+  - [-1, 1, Conv, [int(40 * width_multiple), 3, 2]]  # 9, downsample P3
+  - [[-1, 5], 1, Concat, [1]]  # 10
+  - [-1, 3, C2f, [int(112 * width_multiple), True]]  # 11, P4
+
+  - [-1, 1, Conv, [int(112 * width_multiple), 3, 2]]  # 12, downsample P4
+  - [[-1, 2], 1, Concat, [1]] #13, Connect to SPPF output
+  - [-1, 3, C2f, [int(1280 * width_multiple), True]] # 14, P5
+
+  - [[8, 11, 14], 1, Detect, [nc]]  # Detect (P3, P4, P5)
