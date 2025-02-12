@@ -3,11 +3,11 @@ nc: 2  # Number of classes (adjust as needed)
 strides: [8, 16, 32]  # Output strides for detection head
 scales:
   # [depth, width, max_channels]
-  n: [0.33, 0.25, 1024]
+  # n: [0.33, 0.25, 1024]
   s: [0.33, 0.50, 1024]
-  m: [0.67, 0.75, 768]
-  l: [1.00, 1.00, 512]
-  x: [1.00, 1.25, 512]
+  # m: [0.67, 0.75, 768]
+  # l: [1.00, 1.00, 512]
+  # x: [1.00, 1.25, 512]
 
 backbone:
   # [from, repeats, module, args]
