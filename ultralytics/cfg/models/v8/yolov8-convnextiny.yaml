@@ -1,0 +1,47 @@
+# YOLOv8-ConvNeXt_tiny-FPN
+nc: 2  # Number of classes (adjust as needed)
+strides: [8, 16, 32]  # Output strides for detection head
+scales:
+  # [depth, width, max_channels]
+  # (For ConvNeXt-tiny, the maximum channel count is 768)
+  # n: [0.33, 0.25, 768]
+  s: [0.33, 0.50, 768]
+  # m: [0.67, 0.75, 768]
+  # l: [1.00, 1.00, 768]
+  # x: [1.00, 1.25, 768]
+
+backbone:
+  # [from, repeats, module, args]
+  # Module 0: Load ConvNeXt‑tiny via TorchVision.
+  # Arguments: [expected_final_channels, model_name, weights, unwrap, truncate, split]
+  - [-1, 1, TorchVision, [768, 'convnext_tiny', DEFAULT, True, 0, True]]  # 0: Backbone returns a list; final feature should be 768 channels (at ~stride 32)
+  
+  # Extract feature maps from the backbone’s output list (ignoring Output 0 which is the input):
+  - [0, 1, Index, [192, 3]]    # 1: P3/8 – from output index 3: (B, 192, 80, 80)
+  - [0, 1, Index, [384, 5]]    # 2: P4/16 – from output index 5: (B, 384, 40, 40)
+  - [0, 1, Index, [768, 7]]    # 3: P5/32 – from output index 7: (B, 768, 20, 20)
+  - [-1, 1, SPPF, [768, 5]]    # 4: SPPF applied to P5 feature (B, 768, 20, 20)
+
+head:
+  # [from, repeats, module, args]
+
+  # --- FPN (Top-Down) Pathway ---
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]         # 5: Upsample module 4 (P5) from 20×20 to 40×40
+  - [[-1, 2], 1, Concat, [1]]                           # 6: Concat upsampled P5 (768 channels) with P4 (384 channels) → (B, 1152, 40, 40)
+  - [-1, 3, C2f, [384, True]]                           # 7: Process fused feature → output 384 channels (B, 384, 40, 40)
+  
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]         # 8: Upsample module 7 from 40×40 to 80×80
+  - [[-1, 1], 1, Concat, [1]]                           # 9: Concat upsampled feature (384 channels) with P3 (192 channels) → (B, 576, 80, 80)
+  - [-1, 3, C2f, [192, True]]                           # 10: Process fused feature → output 192 channels (B, 192, 80, 80)
+  
+  # --- PANet (Bottom-Up) Pathway ---
+  - [-1, 1, Conv, [192, 3, 2]]                         # 11: Downsample module 10 from 80×80 to 40×40
+  - [[-1, 7], 1, Concat, [1]]                           # 12: Concat downsampled feature (192 channels) with processed P4 from module 7 (384 channels) → (B, 576, 40, 40)
+  - [-1, 3, C2f, [384, True]]                           # 13: Process fused feature → output 384 channels (B, 384, 40, 40)
+  
+  - [-1, 1, Conv, [384, 3, 2]]                         # 14: Downsample module 13 from 40×40 to 20×20
+  - [[-1, 4], 1, Concat, [1]]                           # 15: Concat downsampled feature (384 channels) with SPPF output from module 4 (768 channels) → (B, 1152, 20, 20)
+  - [-1, 3, C2f, [768, True]]                          # 16: Process fused feature → output 768 channels (B, 768, 20, 20)
+  
+  # --- Detection Head ---
+  - [[10, 13, 16], 1, Detect, [nc]]                     # 17: Final detection head using features from modules 10 (P3), 13 (P4), and 16 (P5)
