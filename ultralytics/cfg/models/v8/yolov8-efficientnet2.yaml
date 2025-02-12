@@ -11,7 +11,7 @@ scales:
 
 backbone:
   # [from, repeats, module, args]
-  - [-1, 1, TorchVision, ['efficientnet_b3', DEFAULT, True, 2, True]]  # 0 (B, list with final feature: 1536 channels at H/32)
+  - [-1, 1, TorchVision, [1536,'efficientnet_b3', DEFAULT, True, 2, True]]  # 0 (B, list with final feature: 1536 channels at H/32)
   - [0, 1, Index, [48, 4]]     # 1 - P3/8  (B, 48, 80, 80)
   - [0, 1, Index, [136, 6]]    # 2 - P4/16 (B, 136, 40, 40)
   - [0, 1, Index, [1536, 9]]   # 3 - P5/32 (B, 1536, 20, 20)
