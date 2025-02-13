@@ -16,6 +16,7 @@ Example:
     os.system(f"onnxslim {f} {f} && open {f}")  # pip install onnxslim
     ```
 """
+from .bifpn import BiFPN # Import BiFPN class
 
 from .block import (
     C1,
@@ -57,6 +58,10 @@ from .block import (
     ResNetLayer,
     SCDown,
     TorchVision,
+    BiFPNBlock,
+    DepthwiseConvBlock,
+    ConvBlock,
+
 )
 from .conv import (
     CBAM,
@@ -161,4 +166,8 @@ __all__ = (
     "TorchVision",
     "Index",
     "EfficientNetB0Extractor",
+    "BiFPNBlock",
+    "DepthwiseConvBlock",
+    "ConvBlock",
+    "BiFPN",
 )
