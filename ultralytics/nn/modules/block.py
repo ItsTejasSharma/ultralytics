@@ -1157,6 +1157,7 @@ class TorchVision(nn.Module):
         else:
             y = self.m(x)
         return y
+        
 class DepthwiseConvBlock(nn.Module):
     """
     Depthwise seperable convolution. 
@@ -1179,6 +1180,7 @@ class DepthwiseConvBlock(nn.Module):
         x = self.pointwise(x)
         x = self.bn(x)
         return self.act(x)
+        
 class ConvBlock(nn.Module):
     """
     Convolution block with Batch Normalization and ReLU activation.
@@ -1194,7 +1196,8 @@ class ConvBlock(nn.Module):
         x = self.conv(inputs)
         x = self.bn(x)
         return self.act(x)
-        class BiFPNBlock(nn.Module):
+        
+class BiFPNBlock(nn.Module):
     """
     Bi-directional Feature Pyramid Network
     """
