@@ -3,7 +3,7 @@
 # Parameters (same as yolov8n.yaml, adjust as needed)
 nc: 2  # number of classes
 scales:
-  n: [0.33, 0.25, 1024]
+  n: [0.33, 0.5, 1024]
 
 # YOLOv8.0n backbone (same as yolov8n.yaml)
 backbone:
