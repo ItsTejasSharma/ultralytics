@@ -1007,7 +1007,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             C2fCIB,
             C2PSA,
         }
-    )
+    )# ... (previous code in parse_model) ...
+
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
         m = (
             getattr(torch.nn, m[3:])
@@ -1021,8 +1022,27 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 with contextlib.suppress(ValueError):
                     args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
+
+        # --- MOVED THIS SECTION UP ---
+        if m in {Concat, Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}:
+            args.append([ch[x] for x in f])
+            if m is Segment:
+                args[2] = make_divisible(min(args[2], max_channels) * width, 8)
+            if m in {Detect, Segment, Pose, OBB}:
+                m.legacy = legacy
+        elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
+            args.insert(1, [ch[x] for x in f])
+        elif m is BiFPN:
+            args = [[ch[x] for x in f]]
+            args.append(d.get('feature_size', 64))  # Default feature_size
+            args.append(d.get('num_layers', 2))     # Default num_layers
+            args.append(d.get('epsilon', 0.0001))  # Default epsilon
+            c2 = args[0][-1]  # Output channels of the last BiFPN layer
+
+
         if m in base_modules:
-            c1, c2 = ch[f], args[0]
+            c1, c2 = ch[f], args[0]  # This line now works correctly
+            # ... (rest of the code in parse_model) ...
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             if m is C2fAttn:  # set 1) embed channels and 2) num heads
