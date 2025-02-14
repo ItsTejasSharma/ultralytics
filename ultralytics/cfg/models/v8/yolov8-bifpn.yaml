@@ -24,7 +24,7 @@ backbone:
 
 # YOLOv8.0n head with BiFPN
 head:
-  - [[3, 5, 7], 1, BiFPN, []]   # 10: BiFPN (P3, P4, P5 in)
+  - ["3,5,7", 1, BiFPN, []]   # 10: BiFPN (P3, P4, P5 in)
 
   - [10, 1, Conv, [256, 1, 1]]  # 11: P3 from BiFPN (index 0)
   - [10, 1, Conv, [512, 1, 1]]  # 12: P4 from BiFPN (index 1)
