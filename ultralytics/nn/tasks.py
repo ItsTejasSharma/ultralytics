@@ -1108,12 +1108,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
     
         # --- FIX: Update save list correctly for BiFPN ---
         if isinstance(f, list) and m == 'BiFPN':
-            save.extend([x % i for x in f])  # Save indices of BiFPN inputs
+            save.extend([x % i for x in f])  # Save indices of BiFPN *inputs*
         else:
-            save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
+            save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
         # --- END FIX ---
-    
-        layers.append(m_)
+        layers.append(m_) #move this line to after save.extend
+
         if i == 0:
             ch = []  # Clear ch after the first layer
     
