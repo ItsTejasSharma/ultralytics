@@ -1059,7 +1059,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                         if args[2] > 1
                         else args[2]
                     )
-                 args = [c1, c2, *args[1:]]
+                args = [c1, c2, *args[1:]]
                 if m in repeat_modules:
                     args.insert(2, n)  # number of repeats
                     n = 1
