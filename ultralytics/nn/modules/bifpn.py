@@ -1,11 +1,5 @@
 # ultralytics/nn/modules/bifpn.py
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from .block import BiFPNBlock, DepthwiseConvBlock, ConvBlock  # Import from block.py
-
 class BiFPN(nn.Module):
-    # ... (Your BiFPN code, referencing BiFPNBlock, etc.) ...
     def __init__(self, size, feature_size=64, num_layers=2, epsilon=0.0001):
         super(BiFPN, self).__init__()
         self.p3 = nn.Conv2d(size[0], feature_size, kernel_size=1, stride=1, padding=0)
@@ -18,10 +12,8 @@ class BiFPN(nn.Module):
         # p7 is computed by applying ReLU followed by a 3x3 stride-2 conv on p6
         self.p7 = ConvBlock(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
 
-        bifpns = []
-        for _ in range(num_layers):
-            bifpns.append(BiFPNBlock(feature_size))
-        self.bifpn = nn.Sequential(*bifpns)
+        self.bifpns = nn.ModuleList([BiFPNBlock(feature_size) for _ in range(num_layers)]) # Use ModuleList
+
 
     def forward(self, inputs):
         c3, c4, c5 = inputs
@@ -34,4 +26,9 @@ class BiFPN(nn.Module):
         p7_x = self.p7(p6_x)
 
         features = [p3_x, p4_x, p5_x, p6_x, p7_x]
-        return self.bifpn(features)
+
+        # Iterate through BiFPN blocks, passing the *list* of features
+        for bifpn_block in self.bifpns:
+            features = bifpn_block(features)  # Pass the entire list
+
+        return features  # Return the list of feature maps
