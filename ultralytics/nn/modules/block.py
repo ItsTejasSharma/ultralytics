@@ -1158,36 +1158,37 @@ class TorchVision(nn.Module):
             y = self.m(x)
         return y
         
+# ultralytics/nn/modules/block.py
+import torch
+import torch.nn as nn  # Import torch.nn
+import torch.nn.functional as F
+
+
 class DepthwiseConvBlock(nn.Module):
     """
-    Depthwise seperable convolution. 
-    
-    
+    Depthwise seperable convolution.
     """
     def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1, freeze_bn=False):
-        super(DepthwiseConvBlock,self).__init__()
-        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size, stride, 
+        super(DepthwiseConvBlock, self).__init__()
+        self.depthwise = nn.Conv2d(in_channels, in_channels, kernel_size, stride,
                                padding, dilation, groups=in_channels, bias=False)
-        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1, 
+        self.pointwise = nn.Conv2d(in_channels, out_channels, kernel_size=1,
                                    stride=1, padding=0, dilation=1, groups=1, bias=False)
-        
-        
         self.bn = nn.BatchNorm2d(out_channels, momentum=0.9997, eps=4e-5)
         self.act = nn.ReLU()
-        
+
     def forward(self, inputs):
         x = self.depthwise(inputs)
         x = self.pointwise(x)
         x = self.bn(x)
         return self.act(x)
-        
+
 class ConvBlock(nn.Module):
     """
     Convolution block with Batch Normalization and ReLU activation.
-    
     """
     def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1, freeze_bn=False):
-        super(ConvBlock,self).__init__()
+        super(ConvBlock, self).__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding)
         self.bn = nn.BatchNorm2d(out_channels, momentum=0.9997, eps=4e-5)
         self.act = nn.ReLU()
@@ -1196,8 +1197,7 @@ class ConvBlock(nn.Module):
         x = self.conv(inputs)
         x = self.bn(x)
         return self.act(x)
-        
-#ultralytics/nn/modules/block.py
+
 class BiFPNBlock(nn.Module):
     """
     Bi-directional Feature Pyramid Network
@@ -1216,12 +1216,11 @@ class BiFPNBlock(nn.Module):
         self.p6_out = DepthwiseConvBlock(feature_size, feature_size)
         self.p7_out = DepthwiseConvBlock(feature_size, feature_size)
 
-        # TODO: Init weights
         self.w1 = nn.Parameter(torch.Tensor(2, 4))
         self.w1_relu = nn.ReLU()
         self.w2 = nn.Parameter(torch.Tensor(3, 4))
         self.w2_relu = nn.ReLU()
-        self.init_weights() # Initialize the weights
+        self.init_weights()  # Initialize the weights
 
     def init_weights(self):
         # Initialize the weights of w1 and w2 to be 1
@@ -1251,4 +1250,3 @@ class BiFPNBlock(nn.Module):
         p7_out = self.p7_out(w2[0, 3] * p7_x + w2[1, 3] * p7_td + w2[2, 3] * F.interpolate(p6_out, scale_factor=0.5, mode='nearest'))
 
         return [p3_out, p4_out, p5_out, p6_out, p7_out]
-    
