@@ -1008,7 +1008,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             C2PSA,
         }
     )
-    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
+        for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
         m = (
             getattr(torch.nn, m[3:])
             if "nn." in m
@@ -1021,40 +1021,32 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 with contextlib.suppress(ValueError):
                     args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
-
-        if m is BiFPN:
-            args = [[ch[x] for x in f]]  # Input channels
-            args.append(d.get('feature_size', 64))  # Feature size (output channels)
-            args.append(d.get('num_layers', 2))     # Number of BiFPN layers
-            args.append(d.get('epsilon', 0.0001))  # Epsilon
-            c2 = args[1]  # Output channels is feature_size (args[1])
-        elif m in {Concat, Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}:
-            args.append([ch[x] for x in f])
-            if m is Segment:
-                args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, Segment, Pose, OBB}:
-                m.legacy = legacy
-        elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
-            args.insert(1, [ch[x] for x in f])
-
-        # NO CHANGES NEEDED WITHIN THE 'base_modules' BLOCK for BiFPN to work
-        elif m in base_modules:
-            c1, c2 = ch[f] if isinstance(f, int) else [ch[x] for x in f], args[0]
+        if m in base_modules:
+            c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
-            if m is C2fAttn:
+            if m is C2fAttn:  # set 1) embed channels and 2) num heads
                 args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
                 args[2] = int(max(round(min(args[2], max_channels // 2 // 32)) * width, 1) if args[2] > 1 else args[2])
+
             args = [c1, c2, *args[1:]]
             if m in repeat_modules:
                 args.insert(2, n)  # number of repeats
                 n = 1
-            if m is C3k2:
+            if m is C3k2:  # for M/L/X sizes
                 legacy = False
                 if scale in "mlx":
                     args[3] = True
-
-        # ... (rest of parse_model, NO OTHER CHANGES NEEDED) ...
+        elif m is AIFI:
+            args = [ch[f], *args]
+        elif m in frozenset({HGStem, HGBlock}):
+            c1, cm, c2 = ch[f], args[0], args[1]
+            args = [c1, cm, c2, *args[2:]]
+            if m is HGBlock:
+                args.insert(4, n)  # number of repeats
+                n = 1
+        elif m is ResNetLayer:
+            c2 = args[1] if args[3] else args[1] * 4
         elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
@@ -1092,6 +1084,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             ch = []
         ch.append(c2)
     return torch.nn.Sequential(*layers), sorted(save)
+
     
 def yaml_model_load(path):
     """Load a YOLOv8 model from a YAML file."""
