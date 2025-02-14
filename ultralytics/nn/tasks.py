@@ -1037,7 +1037,6 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 legacy = False
                 if scale in "mlx":
                     args[3] = True
-            if m in base_modules:
             if m is BiFPN and isinstance(f, list):
                 # Special handling for BiFPN when 'f' is a list:
                 c1 = [ch[x] for x in f]  # Gather channel info from all referenced layers
