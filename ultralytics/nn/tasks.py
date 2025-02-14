@@ -1037,28 +1037,28 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 legacy = False
                 if scale in "mlx":
                     args[3] = True
+    # Special-case for BiFPN: if its "from" field is a list, handle it specially.
             if m is BiFPN and isinstance(f, list):
-                # Special handling for BiFPN when 'f' is a list:
-                c1 = [ch[x] for x in f]  # Gather channel info from all referenced layers
+                c1 = [ch[x] for x in f]  # gather channels from all referenced layers
                 fs = d.get("feature_size", 64)
                 nl = d.get("num_layers", 2)
                 eps = d.get("epsilon", 0.0001)
                 # BiFPN expects (size, feature_size, num_layers, epsilon) as its first arguments
                 args = [c1, fs, nl, eps] + args
-                # Set c2 to a list of fs, one for each input channel
                 c2 = [fs] * len(c1)
-            elif m is SPPF:
-                # For SPPF, do not apply the usual transformation
+            # Special-case for SPPF: do not alter its argument list.
+            elif "SPPF" in str(m):
                 c1 = ch[f]
-                args = [c1, *args]  # Do not add a duplicated out_channels value
-                # Assume that the YAML for SPPF already provides out_channels and other needed args.
-                c2 = args[1]  # Use the out_channels value as defined in the YAML
+                # Use only the first two items from YAML's args: out_channels and kernel size.
+                # That is, if YAML is [1024, 5], then we want to call SPPF(c1, 1024, 5)
+                args = [c1] + args[:2]
+                c2 = args[1]  # typically out_channels
             else:
-                # Standard handling for modules in base_modules:
+                # Standard handling for other modules.
                 c1, c2 = ch[f], args[0]
-                if c2 != nc:  # if c2 not equal to number of classes (e.g. for Classify output)
+                if c2 != nc:  # for Classify or similar outputs
                     c2 = make_divisible(min(c2, max_channels) * width, 8)
-                if m is C2fAttn:  # adjust channels for C2fAttn module
+                if m is C2fAttn:
                     args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
                     args[2] = int(
                         max(round(min(args[2], max_channels // 2 // 32)) * width, 1)
@@ -1067,13 +1067,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                     )
                 args = [c1, c2, *args[1:]]
                 if m in repeat_modules:
-                    args.insert(2, n)  # insert the number of repeats
+                    args.insert(2, n)  # number of repeats
                     n = 1
-                if m is C3k2:  # additional handling for C3k2
+                if m is C3k2:
                     legacy = False
                     if scale in "mlx":
                         args[3] = True
-
 
         elif m is AIFI:
             args = [ch[f], *args]
