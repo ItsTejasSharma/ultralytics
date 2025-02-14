@@ -1197,6 +1197,7 @@ class ConvBlock(nn.Module):
         x = self.bn(x)
         return self.act(x)
         
+#ultralytics/nn/modules/block.py
 class BiFPNBlock(nn.Module):
     """
     Bi-directional Feature Pyramid Network
