@@ -10,8 +10,6 @@ from pathlib import Path
 import thop
 import torch
 
-from .bifpn import BiFPN
-from .block import BiFPNBlock, DepthwiseConvBlock, ConvBlock
 
 from ultralytics.nn.modules import (
     AIFI,
