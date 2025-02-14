@@ -1,4 +1,10 @@
 # ultralytics/nn/modules/bifpn.py
+import torch
+import torch.nn as nn  # Import the torch.nn module as nn
+import torch.nn.functional as F
+from .block import BiFPNBlock, DepthwiseConvBlock, ConvBlock  # Import from block.py
+
+
 class BiFPN(nn.Module):
     def __init__(self, size, feature_size=64, num_layers=2, epsilon=0.0001):
         super(BiFPN, self).__init__()
