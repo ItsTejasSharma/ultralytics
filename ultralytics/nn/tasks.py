@@ -985,6 +985,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             PSA,
             SCDown,
             C2fCIB,
+            BiFPN,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1044,6 +1045,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 n = 1
         elif m is ResNetLayer:
             c2 = args[1] if args[3] else args[1] * 4
+        elif m is BiFPN:
+            args = [[ch[x] for x in f]]
+            args.append(d.get('feature_size', 64))  # Default feature_size
+            args.append(d.get('num_layers', 2))     # Default num_layers
+            args.append(d.get('epsilon', 0.0001))  # Default epsilon
+            c2 = args[0][-1]  # Output channels of the last BiFPN layer
         elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
