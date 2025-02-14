@@ -8,6 +8,9 @@ from .block import BiFPNBlock, DepthwiseConvBlock, ConvBlock  # Import from bloc
 class BiFPN(nn.Module):
     def __init__(self, size, feature_size=64, num_layers=2, epsilon=0.0001):
         super(BiFPN, self).__init__()
+        # If 'size' is a string like "3,5,7", convert it to a list of integers
+        if isinstance(size, str):
+            size = [int(x) for x in size.split(',')]
         self.p3 = nn.Conv2d(size[0], feature_size, kernel_size=1, stride=1, padding=0)
         self.p4 = nn.Conv2d(size[1], feature_size, kernel_size=1, stride=1, padding=0)
         self.p5 = nn.Conv2d(size[2], feature_size, kernel_size=1, stride=1, padding=0)
