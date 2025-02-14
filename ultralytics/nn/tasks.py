@@ -1038,12 +1038,36 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 if scale in "mlx":
                     args[3] = True
             if m is BiFPN and isinstance(f, list):
-                c1 = [ch[x] for x in f]
+             # Special handling for BiFPN when 'f' is a list
+                c1 = [ch[x] for x in f]  # Gather the channel info from all referenced layers
                 fs = d.get("feature_size", 64)
                 nl = d.get("num_layers", 2)
                 eps = d.get("epsilon", 0.0001)
+                # Build the arguments list for BiFPN:
+                # BiFPN expects: (size, feature_size, num_layers, epsilon) as its first arguments
                 args = [c1, fs, nl, eps] + args
+                # For tracking output channels, we set c2 as a list of fs (one for each input channel)
                 c2 = [fs] * len(c1)
+            else:
+                c1, c2 = ch[f], args[0]
+                 if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+                if m is C2fAttn:  # set 1) embed channels and 2) num heads
+                    args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
+                    args[2] = int(
+                        max(round(min(args[2], max_channels // 2 // 32)) * width, 1)
+                        if args[2] > 1
+                        else args[2]
+                    )
+                 args = [c1, c2, *args[1:]]
+                if m in repeat_modules:
+                    args.insert(2, n)  # number of repeats
+                    n = 1
+                if m is C3k2:  # for M/L/X sizes
+                    legacy = False
+                    if scale in "mlx":
+                        args[3] = True
+
 
         elif m is AIFI:
             args = [ch[f], *args]
