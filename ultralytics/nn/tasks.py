@@ -1029,7 +1029,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
                 args[2] = int(max(round(min(args[2], max_channels // 2 // 32)) * width, 1) if args[2] > 1 else args[2])
 
-            args = [c1, *args[1:]]
+            args = [c1, c2, *args[1:]]
             if m in repeat_modules:
                 args.insert(2, n)  # number of repeats
                 n = 1
@@ -1039,34 +1039,29 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                     args[3] = True
     # Check if 'f' is a list.
             if isinstance(f, list):
-                # Only BiFPN is allowed to have a list as its 'from' field.
                 if m is BiFPN:
-                    # Gather channel info from each referenced layer.
                     c1 = [ch[x] for x in f]
                     fs = d.get("feature_size", 64)
                     nl = d.get("num_layers", 2)
                     eps = d.get("epsilon", 0.0001)
-                    # Prepend BiFPN-specific hyperparameters to args.
                     args = [c1, fs, nl, eps] + args
-                    # Set c2 as a list of output channels (one per input).
                     c2 = [fs] * len(c1)
                 else:
                     raise ValueError(f"Module {m} does not support a list 'from' field: {f}")
-            else:
-                # Standard handling when f is an integer.
-                c1, c2 = ch[f], args[0]
-                if c2 != nc:  # if c2 not equal to number of classes (e.g. for Classify() output)
+            else:  # 'f' is an integer (normal case).
+                c1, c2 = ch[f], args[0]  # Moved here for correct indexing.
+                if c2 != nc:
                     c2 = make_divisible(min(c2, max_channels) * width, 8)
-                if m is C2fAttn:  # adjust for C2fAttn if needed
-                    args[1] = make_divisible(min(args[1], max_channels // 2) * width, 8)
-                    args[2] = int(
-                        max(round(min(args[2], max_channels // 2 // 32)) * width, 1)
-                        if args[2] > 1
-                        else args[2]
-                    )
-                args = [c1, c2, *args[1:]]
+
+                # --- SPPF-Specific Fix ---
+                if m is SPPF:
+                    args = [c1, *args[1:]]  # Correct args for SPPF.
+                else:  # For all other base_modules (NOT SPPF)
+                    args = [c1, c2, *args[1:]] # Keep original line for other modules
+                # --- End SPPF-Specific Fix ---
+
                 if m in repeat_modules:
-                    args.insert(2, n)  # number of repeats
+                    args.insert(2, n)
                     n = 1
                 if m is C3k2:
                     legacy = False
