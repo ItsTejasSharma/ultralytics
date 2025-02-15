@@ -6,6 +6,7 @@ import re
 import types
 from copy import deepcopy
 from pathlib import Path
+import torch.nn as nn
 
 import thop
 import torch
