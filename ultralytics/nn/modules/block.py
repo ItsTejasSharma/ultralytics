@@ -1184,21 +1184,26 @@ class DepthwiseConvBlock(nn.Module):
         return self.act(x)
     
 class ConvBlock(nn.Module):
-    """
-    Convolution block with Batch Normalization and ReLU activation.
-    
-    """
-    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1, padding=0, dilation=1, freeze_bn=False):
-        super(ConvBlock,self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding)
-        self.bn = nn.BatchNorm2d(out_channels, momentum=0.9997, eps=4e-5)
-        self.act = nn.ReLU()
+    """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
 
-    def forward(self, inputs):
-        x = self.conv(inputs)
-        x = self.bn(x)
-        return self.act(x)
+    default_act = nn.SiLU()  # Use the same default activation as the original Conv class
 
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        """Initialize Conv layer with given arguments including activation."""
+        super().__init__()
+        self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+        self.stride = s  # Explicitly store the stride attribute
+
+    def forward(self, x):
+        """Apply convolution, batch normalization and activation to input tensor."""
+        return self.act(self.bn(self.conv(x)))
+
+    def forward_fuse(self, x):
+        """Apply convolution and activation without batch normalization."""
+        return self.act(self.conv(x))
+        
 class BiFPNBlock(nn.Module):
     """
     Bi-directional Feature Pyramid Network
