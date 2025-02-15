@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from .block import BiFPNBlock  # Ensure this is correctly imported
+from .block import BiFPNBlock, ConvBlock, DepthwiseConvBlock  # Ensure this is correctly imported
 
 class BiFPN(nn.Module):
     def __init__(self, in_channels, out_channels, num_layers=2, epsilon=0.0001):
