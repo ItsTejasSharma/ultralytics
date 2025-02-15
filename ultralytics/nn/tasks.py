@@ -1027,100 +1027,101 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
     
         if m in base_modules:
-            # Check if 'f' is a list (BiFPN case).
-            if isinstance(f, list):
-                if m == 'BiFPN':  # Use string comparison for BiFPN
-                    c1 = [ch[x] for x in f]
-                    fs = d.get("feature_size", 64)
-                    nl = d.get("num_layers", 2)
-                    eps = d.get("epsilon", 0.0001)
-                    args = [c1, fs, nl, eps] + args
-                    c2 = [fs] * len(c1)
-    
-                    # --- FIX: Extend ch, don't append ---
-                    ch.extend(c2)  # Extend, not append!
-                    # --- END FIX ---
-    
-                else:
-                    raise ValueError(f"Module {m} does not support a list 'from' field: {f}")
-            else:  # 'f' is an integer (normal case).
-                c1, c2 = ch[f], args[0]
-                if c2 != nc:
-                    c2 = make_divisible(min(c2, max_channels) * width, 8)
-    
-                # --- SPPF-Specific Fix ---
-                if m == 'SPPF':  # Use string comparison for SPPF
-                    args = [c1, *args[1:]]  # Correct args for SPPF.
-                else:  # For all other base_modules (NOT SPPF)
-                    args = [c1, c2, *args[1:]]  # Keep original line for other modules
-                # --- End SPPF-Specific Fix ---
-    
-                if m in repeat_modules:
-                    args.insert(2, n)
-                    n = 1
-                if m == 'C3k2':  # Use string comparison for C3k2
-                    legacy = False
-                    if scale in "mlx":
-                        args[3] = True
-    
-                if not isinstance(f, list):  # Only append if not BiFPN
-                    ch.append(c2)
-    
-    
-        elif m == 'AIFI':
-            args = [ch[f], *args]
-        elif m in frozenset({'HGStem', 'HGBlock'}):
-            c1, cm, c2 = ch[f], args[0], args[1]
-            args = [c1, cm, c2, *args[2:]]
-            if m == 'HGBlock':
-                args.insert(4, n)  # number of repeats
-                n = 1
-        elif m == 'ResNetLayer':
-            c2 = args[1] if args[3] else args[1] * 4
-        elif m == 'BatchNorm2d':
-            args = [ch[f]]
-        elif m == 'Concat':
-            c2 = sum(ch[x] for x in f)
-        elif m in frozenset({'Detect', 'WorldDetect', 'Segment', 'Pose', 'OBB', 'ImagePoolingAttn', 'v10Detect'}):
-            args.append([ch[x] for x in f])
-            if m == 'Segment':
-                args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {'Detect', 'Segment', 'Pose', 'OBB'}:
-                m.legacy = legacy
-        elif m == 'RTDETRDecoder':  # special case, channels arg must be passed in index 1
-            args.insert(1, [ch[x] for x in f])
-        elif m == 'CBLinear':
-            c2 = args[0]
-            c1 = ch[f]
-            args = [c1, c2, *args[1:]]
-        elif m == 'CBFuse':
-            c2 = ch[f[-1]]
-        elif m in frozenset({'TorchVision', 'Index'}):
-            c2 = args[0]
-            c1 = ch[f]
-            args = [*args[1:]]
-        else:
-            c2 = ch[f]
-    
-        m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
-        t = str(m)[8:-2].replace("__main__.", "")  # module type
-        m_.np = sum(x.numel() for x in m_.parameters())  # number params
-        m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
-        if verbose:
-            print(f"{i:>3}{str(f):>20}{n_:>3}{m_.np:10.0f}  {t:<45}{str(args):<30}")  # print
-    
-        # --- FIX: Update save list correctly for BiFPN ---
-        if isinstance(f, list) and m == 'BiFPN':
-            save.extend([x % i for x in f])  # Save indices of BiFPN *inputs*
-        else:
-            save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
-        # --- END FIX ---
-        layers.append(m_) #move this line to after save.extend
+    # Check if 'f' is a list (BiFPN case).
+    if isinstance(f, list):
+        if m == 'BiFPN':  # Use string comparison for BiFPN
+            c1 = [ch[x] for x in f]  # Collect channels from layers 3, 5, and 7
+            fs = d.get("feature_size", 64)  # Feature size for BiFPN
+            nl = d.get("num_layers", 2)  # Number of BiFPN layers
+            eps = d.get("epsilon", 0.0001)  # Epsilon for BiFPN
+            args = [c1, fs, nl, eps] + args  # Combine arguments
+            c2 = [fs] * len(c1)  # Output channels for BiFPN
 
-        if i == 0:
-            ch = []  # Clear ch after the first layer
-    
-    return nn.Sequential(*layers), sorted(save)
+            # --- FIX: Extend ch, don't append ---
+            ch.extend(c2)  # Extend, not append!
+            # --- END FIX ---
+
+        else:
+            raise ValueError(f"Module {m} does not support a list 'from' field: {f}")
+    else:  # 'f' is an integer (normal case).
+        c1, c2 = ch[f], args[0]
+        if c2 != nc:
+            c2 = make_divisible(min(c2, max_channels) * width, 8)
+
+        # --- SPPF-Specific Fix ---
+        if m == 'SPPF':  # Use string comparison for SPPF
+            args = [c1, *args[1:]]  # Correct args for SPPF.
+        else:  # For all other base_modules (NOT SPPF)
+            args = [c1, c2, *args[1:]]  # Keep original line for other modules
+        # --- End SPPF-Specific Fix ---
+
+        if m in repeat_modules:
+            args.insert(2, n)
+            n = 1
+        if m == 'C3k2':  # Use string comparison for C3k2
+            legacy = False
+            if scale in "mlx":
+                args[3] = True
+
+        if not isinstance(f, list):  # Only append if not BiFPN
+            ch.append(c2)
+
+elif m == 'AIFI':
+    args = [ch[f], *args]
+elif m in frozenset({'HGStem', 'HGBlock'}):
+    c1, cm, c2 = ch[f], args[0], args[1]
+    args = [c1, cm, c2, *args[2:]]
+    if m == 'HGBlock':
+        args.insert(4, n)  # number of repeats
+        n = 1
+elif m == 'ResNetLayer':
+    c2 = args[1] if args[3] else args[1] * 4
+elif m == 'BatchNorm2d':
+    args = [ch[f]]
+elif m == 'Concat':
+    c2 = sum(ch[x] for x in f)
+elif m in frozenset({'Detect', 'WorldDetect', 'Segment', 'Pose', 'OBB', 'ImagePoolingAttn', 'v10Detect'}):
+    args.append([ch[x] for x in f])
+    if m == 'Segment':
+        args[2] = make_divisible(min(args[2], max_channels) * width, 8)
+    if m in {'Detect', 'Segment', 'Pose', 'OBB'}:
+        m.legacy = legacy
+elif m == 'RTDETRDecoder':  # special case, channels arg must be passed in index 1
+    args.insert(1, [ch[x] for x in f])
+elif m == 'CBLinear':
+    c2 = args[0]
+    c1 = ch[f]
+    args = [c1, c2, *args[1:]]
+elif m == 'CBFuse':
+    c2 = ch[f[-1]]
+elif m in frozenset({'TorchVision', 'Index'}):
+    c2 = args[0]
+    c1 = ch[f]
+    args = [*args[1:]]
+else:
+    c2 = ch[f]
+
+m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+t = str(m)[8:-2].replace("__main__.", "")  # module type
+m_.np = sum(x.numel() for x in m_.parameters())  # number params
+m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
+if verbose:
+    print(f"{i:>3}{str(f):>20}{n_:>3}{m_.np:10.0f}  {t:<45}{str(args):<30}")  # print
+
+# --- FIX: Update save list correctly for BiFPN ---
+if isinstance(f, list) and m == 'BiFPN':
+    save.extend([x % i for x in f])  # Save indices of BiFPN *inputs*
+else:
+    save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
+# --- END FIX ---
+layers.append(m_)  # Move this line to after save.extend
+
+# --- FIX: Do not clear ch after the first layer ---
+# if i == 0:
+#     ch = []  # Remove this line to prevent clearing ch
+# --- END FIX ---
+
+return nn.Sequential(*layers), sorted(save)
     
 def yaml_model_load(path):
     """Load a YOLOv8 model from a YAML file."""
