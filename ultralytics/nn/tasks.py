@@ -953,8 +953,9 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
     ch = [ch]  # wrap input channels in a list
     layers, save = [], []
-    c2 = ch[-1]  # current channel from last layer
-
+    # c2 will be updated below; initially it is the last element of ch.
+    # Note: Removed the "if i==0: ch = []" line to avoid clearing backbone channels.
+    
     # Helper: substitute string args with config values from d.
     def substitute_args(arg_list, cfg):
         new_args = []
@@ -962,7 +963,6 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
             if isinstance(arg, str) and arg in cfg:
                 new_args.append(cfg[arg])
             else:
-                # Try literal evaluation; if it fails, keep the original argument.
                 with contextlib.suppress(Exception):
                     arg = ast.literal_eval(arg)
                 new_args.append(arg)
@@ -971,7 +971,7 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
     # Use the model dictionary as our configuration dictionary for substitutions.
     cfg = d
 
-    # Define base modules and repeat modules (list may be extended as needed)
+    # Define base modules and repeat modules (extend as needed)
     base_modules = frozenset({
         Classify,
         Conv,
@@ -1028,9 +1028,9 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
         C2PSA,
     })
 
-    # Process each layer defined in backbone and head
+    # Process each layer defined in backbone and head.
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):
-        # Retrieve the module class
+        # Retrieve the module class.
         if "nn." in m:
             m = getattr(torch.nn, m[3:])
         elif "torchvision.ops." in m:
@@ -1045,14 +1045,14 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
         n = n_ = max(round(n * depth), 1) if n > 1 else n
 
         if m in base_modules:
-            # If 'f' is a list, handle specially (e.g., for BiFPN)
+            # If 'f' is a list, handle multi-input layers (e.g., BiFPN).
             if isinstance(f, list):
                 if m is BiFPN:
                     c1 = [ch[x] for x in f]  # get input channels from multiple layers
                     fs = d.get("feature_size", 64)  # expected feature size
                     nl = d.get("num_layers", 2)       # number of BiFPN layers
                     eps = d.get("epsilon", 0.0001)      # epsilon value for BiFPN
-                    # Combine the BiFPN-specific arguments with any additional ones.
+                    # Combine BiFPN-specific arguments with any additional ones.
                     args = [c1, fs, nl, eps] + args
                     c2 = [fs] * len(c1)
                     ch.extend(c2)  # Extend channel list with BiFPN outputs.
@@ -1077,7 +1077,7 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
             c1, cm, c2_val = ch[f], args[0], args[1]
             args = [c1, cm, c2_val, *args[2:]]
             if m is HGBlock:
-                args.insert(4, n)  # number of repeats for HGBlock
+                args.insert(4, n)  # number of repeats for HGBlock.
                 n = 1
         elif m is ResNetLayer:
             c2_val = args[1] if args[3] else args[1] * 4
@@ -1106,7 +1106,7 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
         else:
             c2_val = ch[f]
 
-        # Create module instance; if repeats > 1, wrap in nn.Sequential.
+        # Create the module instance; if n > 1, wrap in a Sequential.
         if n > 1:
             m_instance = torch.nn.Sequential(*(m(*args) for _ in range(n)))
         else:
@@ -1116,14 +1116,13 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
         m_instance.i, m_instance.f, m_instance.type = i, f, t
         if verbose:
             LOGGER.info(f"{i:>3}{str(f):>20}{n_:>3}{m_instance.np:10.0f}  {t:<45}{str(args):<30}")
-        # Save indices (for later use)
+        # Save indices (for later use).
         if isinstance(f, list) and m is BiFPN:
             save.extend([x % i for x in f])
         else:
             save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
         layers.append(m_instance)
-        if i == 0:
-            ch = []  # clear ch after processing the first layer if that is desired
+        # Note: We do NOT clear 'ch' here so that backbone outputs remain available for head layers.
 
     # Return the complete sequential model and the sorted save list.
     return torch.nn.Sequential(*layers), sorted(save)
