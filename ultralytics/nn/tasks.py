@@ -1047,17 +1047,18 @@ def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g.
         if m in base_modules:
             # If 'f' is a list, handle multi-input layers (e.g., BiFPN).
             if isinstance(f, list):
-                if m is BiFPN:
-                    c1 = [ch[x] for x in f]  # get input channels from multiple layers
-                    fs = d.get("feature_size", 64)  # expected feature size
-                    nl = d.get("num_layers", 2)       # number of BiFPN layers
-                    eps = d.get("epsilon", 0.0001)      # epsilon value for BiFPN
-                    # Combine BiFPN-specific arguments with any additional ones.
-                    args = [c1, fs, nl, eps] + args
-                    c2 = [fs] * len(c1)
-                    ch.extend(c2)  # Extend channel list with BiFPN outputs.
-                else:
-                    raise ValueError(f"Module {m.__name__} does not support a list 'from' field: {f}")
+        if m is BiFPN:
+            c1 = [ch[x] for x in f]  # get input channels from multiple layers
+            fs = d.get("feature_size", 64)  # expected feature size
+            nl = d.get("num_layers", 2)       # number of BiFPN layers
+            eps = d.get("epsilon", 0.0001)      # epsilon value for BiFPN
+            # Override the args completely for BiFPN (ignore extra YAML args)
+            args = [c1, fs, nl, eps]
+            c2 = [fs] * len(c1)
+            ch.extend(c2)
+        else:
+            raise ValueError(f"Module {m.__name__} does not support a list 'from' field: {f}")
+
             else:
                 # For a single integer 'from' index.
                 c1, c2_val = ch[f], args[0]
