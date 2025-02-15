@@ -162,6 +162,17 @@ class v8DetectionLoss:
         device = next(model.parameters()).device  # get model device
         h = model.args  # hyperparameters
 
+                # Find the Detect module
+        detect_module = None
+        for module in model.model.modules():
+            if isinstance(module, Detect):
+                detect_module = module
+                break
+
+        if detect_module is None:
+            raise ValueError("Detect module not found in the model")
+
+        
         m = model.model[-1]  # Detect() module
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
         self.hyp = h
