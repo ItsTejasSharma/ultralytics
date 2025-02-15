@@ -928,10 +928,9 @@ def attempt_load_one_weight(weight, device=None, inplace=True, fuse=False):
     return model, ckpt
 
 
-def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
+def parse_model(d, ch, verbose=True):  # d: model_dict, ch: input_channels (e.g., 3)
     """Parse a YOLO model.yaml dictionary into a PyTorch model."""
-    import ast
-    import ultralytics.nn.modules 
+    import ast, contextlib
     # Args
     legacy = True  # backward compatibility for v3/v5/v8/v9 models
     max_channels = float("inf")
@@ -945,184 +944,189 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
         depth, width, max_channels = scales[scale]
 
     if act:
-        Conv.default_act = eval(act)  # redefine default activation, i.e. Conv.default_act = torch.nn.SiLU()
+        # Redefine default activation, e.g., Conv.default_act = torch.nn.SiLU()
+        Conv.default_act = eval(act)
         if verbose:
-            LOGGER.info(f"{colorstr('activation:')} {act}")  # print
+            LOGGER.info(f"{colorstr('activation:')} {act}")
 
     if verbose:
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
-    ch = [ch]
-    layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    base_modules = frozenset(
-        {
-            Classify,
-            Conv,
-            ConvTranspose,
-            GhostConv,
-            Bottleneck,
-            GhostBottleneck,
-            SPP,
-            SPPF,
-            C2fPSA,
-            C2PSA,
-            DWConv,
-            Focus,
-            BottleneckCSP,
-            C1,
-            C2,
-            C2f,
-            C3k2,
-            RepNCSPELAN4,
-            ELAN1,
-            ADown,
-            AConv,
-            SPPELAN,
-            C2fAttn,
-            C3,
-            C3TR,
-            C3Ghost,
-            torch.nn.ConvTranspose2d,
-            DWConvTranspose2d,
-            C3x,
-            RepC3,
-            PSA,
-            SCDown,
-            C2fCIB,
-            BiFPN,
-            DepthwiseConvBlock,
-            ConvBlock,
-            BiFPNBlock,
-        }
-    )
-    repeat_modules = frozenset(  # modules with 'repeat' arguments
-        {
-            BottleneckCSP,
-            C1,
-            C2,
-            C2f,
-            C3k2,
-            C2fAttn,
-            C3,
-            C3TR,
-            C3Ghost,
-            C3x,
-            RepC3,
-            C2fPSA,
-            C2fCIB,
-            C2PSA,
-        }
-    )
-    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
-        m = (
-            getattr(torch.nn, m[3:])
-            if "nn." in m
-            else getattr(__import__("torchvision").ops, m[16:])  # Corrected import
-            if "torchvision.ops." in m
-            else globals()[m]
-        )  # get module
-    
-        for j, a in enumerate(args):
-            if isinstance(a, str):
-                with contextlib.suppress(ValueError):
-                    args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
-        n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
-    
+    ch = [ch]  # wrap input channels in a list
+    layers, save = [], []
+    c2 = ch[-1]  # current channel from last layer
+
+    # Helper: substitute string args with config values from d.
+    def substitute_args(arg_list, cfg):
+        new_args = []
+        for arg in arg_list:
+            if isinstance(arg, str) and arg in cfg:
+                new_args.append(cfg[arg])
+            else:
+                # Try literal evaluation; if it fails, keep the original argument.
+                with contextlib.suppress(Exception):
+                    arg = ast.literal_eval(arg)
+                new_args.append(arg)
+        return new_args
+
+    # Use the model dictionary as our configuration dictionary for substitutions.
+    cfg = d
+
+    # Define base modules and repeat modules (list may be extended as needed)
+    base_modules = frozenset({
+        Classify,
+        Conv,
+        ConvTranspose,
+        GhostConv,
+        Bottleneck,
+        GhostBottleneck,
+        SPP,
+        SPPF,
+        C2fPSA,
+        C2PSA,
+        DWConv,
+        Focus,
+        BottleneckCSP,
+        C1,
+        C2,
+        C2f,
+        C3k2,
+        RepNCSPELAN4,
+        ELAN1,
+        ADown,
+        AConv,
+        SPPELAN,
+        C2fAttn,
+        C3,
+        C3TR,
+        C3Ghost,
+        torch.nn.ConvTranspose2d,
+        DWConvTranspose2d,
+        C3x,
+        RepC3,
+        PSA,
+        SCDown,
+        C2fCIB,
+        BiFPN,
+        DepthwiseConvBlock,
+        ConvBlock,
+        BiFPNBlock,
+    })
+    repeat_modules = frozenset({
+        BottleneckCSP,
+        C1,
+        C2,
+        C2f,
+        C3k2,
+        C2fAttn,
+        C3,
+        C3TR,
+        C3Ghost,
+        C3x,
+        RepC3,
+        C2fPSA,
+        C2fCIB,
+        C2PSA,
+    })
+
+    # Process each layer defined in backbone and head
+    for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):
+        # Retrieve the module class
+        if "nn." in m:
+            m = getattr(torch.nn, m[3:])
+        elif "torchvision.ops." in m:
+            m = getattr(__import__("torchvision").ops, m[16:])
+        else:
+            m = globals()[m]
+
+        # Substitute any string arguments with corresponding config values.
+        args = substitute_args(args, cfg)
+
+        # Apply depth scaling to the repeat count.
+        n = n_ = max(round(n * depth), 1) if n > 1 else n
+
         if m in base_modules:
-            # Check if 'f' is a list (BiFPN case).
+            # If 'f' is a list, handle specially (e.g., for BiFPN)
             if isinstance(f, list):
-                if m == 'BiFPN':  # Use string comparison for BiFPN
-                    c1 = [ch[x] for x in f]  # Collect channels from layers 3, 5, and 7
-                    fs = d.get("feature_size", 64)  # Feature size for BiFPN
-                    nl = d.get("num_layers", 2)  # Number of BiFPN layers
-                    eps = d.get("epsilon", 0.0001)  # Epsilon for BiFPN
-                    args = [c1, fs, nl, eps] + args  # Combine arguments
-                    c2 = [fs] * len(c1)  # Output channels for BiFPN
-        
-                    # --- FIX: Extend ch, don't append ---
-                    ch.extend(c2)  # Extend, not append!
-                    # --- END FIX ---
-        
+                if m is BiFPN:
+                    c1 = [ch[x] for x in f]  # get input channels from multiple layers
+                    fs = d.get("feature_size", 64)  # expected feature size
+                    nl = d.get("num_layers", 2)       # number of BiFPN layers
+                    eps = d.get("epsilon", 0.0001)      # epsilon value for BiFPN
+                    # Combine the BiFPN-specific arguments with any additional ones.
+                    args = [c1, fs, nl, eps] + args
+                    c2 = [fs] * len(c1)
+                    ch.extend(c2)  # Extend channel list with BiFPN outputs.
                 else:
-                    raise ValueError(f"Module {m} does not support a list 'from' field: {f}")
-            else:  # 'f' is an integer (normal case).
-                c1, c2 = ch[f], args[0]
-                if c2 != nc:
-                    c2 = make_divisible(min(c2, max_channels) * width, 8)
-        
-                # --- SPPF-Specific Fix ---
-                if m == 'SPPF':  # Use string comparison for SPPF
-                    args = [c1, *args[1:]]  # Correct args for SPPF.
-                else:  # For all other base_modules (NOT SPPF)
-                    args = [c1, c2, *args[1:]]  # Keep original line for other modules
-                # --- End SPPF-Specific Fix ---
-        
+                    raise ValueError(f"Module {m.__name__} does not support a list 'from' field: {f}")
+            else:
+                # For a single integer 'from' index.
+                c1, c2_val = ch[f], args[0]
+                if c2_val != nc:  # adjust channel count if not matching number of classes
+                    c2_val = make_divisible(min(c2_val, max_channels) * width, 8)
+                if m is SPPF:
+                    args = [c1, *args[1:]]
+                else:
+                    args = [c1, c2_val, *args[1:]]
                 if m in repeat_modules:
-                    args.insert(2, n)
+                    args.insert(2, n)  # insert the repeat count for modules that need it.
                     n = 1
-                if m == 'C3k2':  # Use string comparison for C3k2
-                    legacy = False
-                    if scale in "mlx":
-                        args[3] = True
-        
-                if not isinstance(f, list):  # Only append if not BiFPN
-                    ch.append(c2)
-        
-        elif m == 'AIFI':
+                ch.append(c2_val)
+        elif m is AIFI:
             args = [ch[f], *args]
-        elif m in frozenset({'HGStem', 'HGBlock'}):
-            c1, cm, c2 = ch[f], args[0], args[1]
-            args = [c1, cm, c2, *args[2:]]
-            if m == 'HGBlock':
-                args.insert(4, n)  # number of repeats
+        elif m in {HGStem, HGBlock}:
+            c1, cm, c2_val = ch[f], args[0], args[1]
+            args = [c1, cm, c2_val, *args[2:]]
+            if m is HGBlock:
+                args.insert(4, n)  # number of repeats for HGBlock
                 n = 1
-        elif m == 'ResNetLayer':
-            c2 = args[1] if args[3] else args[1] * 4
-        elif m == 'BatchNorm2d':
+        elif m is ResNetLayer:
+            c2_val = args[1] if args[3] else args[1] * 4
+        elif m is torch.nn.BatchNorm2d:
             args = [ch[f]]
-        elif m == 'Concat':
-            c2 = sum(ch[x] for x in f)
-        elif m in frozenset({'Detect', 'WorldDetect', 'Segment', 'Pose', 'OBB', 'ImagePoolingAttn', 'v10Detect'}):
+        elif m is Concat:
+            c2_val = sum(ch[x] for x in f)
+        elif m in {Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}:
             args.append([ch[x] for x in f])
-            if m == 'Segment':
+            if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {'Detect', 'Segment', 'Pose', 'OBB'}:
+            if m in {Detect, Segment, Pose, OBB}:
                 m.legacy = legacy
-        elif m == 'RTDETRDecoder':  # special case, channels arg must be passed in index 1
+        elif m is RTDETRDecoder:
             args.insert(1, [ch[x] for x in f])
-        elif m == 'CBLinear':
-            c2 = args[0]
+        elif m is CBLinear:
+            c2_val = args[0]
             c1 = ch[f]
-            args = [c1, c2, *args[1:]]
-        elif m == 'CBFuse':
-            c2 = ch[f[-1]]
-        elif m in frozenset({'TorchVision', 'Index'}):
-            c2 = args[0]
+            args = [c1, c2_val, *args[1:]]
+        elif m is CBFuse:
+            c2_val = ch[f[-1]]
+        elif m in {TorchVision, Index}:
+            c2_val = args[0]
             c1 = ch[f]
             args = [*args[1:]]
         else:
-            c2 = ch[f]
-        
-        m_ = nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
-        t = str(m)[8:-2].replace("__main__.", "")  # module type
-        m_.np = sum(x.numel() for x in m_.parameters())  # number params
-        m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
+            c2_val = ch[f]
+
+        # Create module instance; if repeats > 1, wrap in nn.Sequential.
+        if n > 1:
+            m_instance = torch.nn.Sequential(*(m(*args) for _ in range(n)))
+        else:
+            m_instance = m(*args)
+        t = str(m)[8:-2].replace("__main__.", "")
+        m_instance.np = sum(x.numel() for x in m_instance.parameters())
+        m_instance.i, m_instance.f, m_instance.type = i, f, t
         if verbose:
-            print(f"{i:>3}{str(f):>20}{n_:>3}{m_.np:10.0f}  {t:<45}{str(args):<30}")  # print
-        
-        # --- FIX: Update save list correctly for BiFPN ---
-        if isinstance(f, list) and m == 'BiFPN':
-            save.extend([x % i for x in f])  # Save indices of BiFPN *inputs*
+            LOGGER.info(f"{i:>3}{str(f):>20}{n_:>3}{m_instance.np:10.0f}  {t:<45}{str(args):<30}")
+        # Save indices (for later use)
+        if isinstance(f, list) and m is BiFPN:
+            save.extend([x % i for x in f])
         else:
             save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
-        # --- END FIX ---
-        layers.append(m_)  # Move this line to after save.extend
-        
-        # --- FIX: Do not clear ch after the first layer ---
-        # if i == 0:
-        #     ch = []  # Remove this line to prevent clearing ch
-        # --- END FIX ---
-        
-        return nn.Sequential(*layers), sorted(save)
+        layers.append(m_instance)
+        if i == 0:
+            ch = []  # clear ch after processing the first layer if that is desired
+
+    # Return the complete sequential model and the sorted save list.
+    return torch.nn.Sequential(*layers), sorted(save)
     
 def yaml_model_load(path):
     """Load a YOLOv8 model from a YAML file."""
