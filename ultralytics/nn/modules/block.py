@@ -1204,6 +1204,10 @@ class ConvBlock(nn.Module):
         """Apply convolution and activation without batch normalization."""
         return self.act(self.conv(x))
         
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 class BiFPNBlock(nn.Module):
     """
     Bi-directional Feature Pyramid Network Block
@@ -1212,18 +1216,15 @@ class BiFPNBlock(nn.Module):
         super(BiFPNBlock, self).__init__()
         self.epsilon = epsilon
 
-        # Top-down pathway
+        # Top-down pathway convolutions
         self.p3_td = DepthwiseConvBlock(feature_size, feature_size)
         self.p4_td = DepthwiseConvBlock(feature_size, feature_size)
         self.p5_td = DepthwiseConvBlock(feature_size, feature_size)
 
-        # Bottom-up pathway
+        # Bottom-up pathway convolutions
+        self.p3_out = DepthwiseConvBlock(feature_size, feature_size)  # ✅ Added for p3_out
         self.p4_out = DepthwiseConvBlock(feature_size, feature_size)
         self.p5_out = DepthwiseConvBlock(feature_size, feature_size)
-
-        # Learnable weights for feature fusion
-        self.w1 = nn.Parameter(torch.ones(2, 3))  # Weights for top-down pathway
-        self.w2 = nn.Parameter(torch.ones(3, 3))  # Weights for bottom-up pathway
 
     def _weighted_fusion(self, features, weights):
         """Helper function for weighted feature fusion."""
@@ -1231,25 +1232,31 @@ class BiFPNBlock(nn.Module):
         weighted_sum = sum(w * f for w, f in zip(weights, features))  # Weighted sum
         return weighted_sum / (weights.sum() + self.epsilon)  # Normalize with epsilon
 
-    def forward(self, inputs):
-        p3_x, p4_x, p5_x = inputs  # Only 3 inputs (p3, p4, p5)
+    def forward(self, inputs, w1, w2):
+        """
+        Forward pass for BiFPN Block
+        :param inputs: Tuple of (p3, p4, p5) feature maps
+        :param w1: Fusion weights for the top-down pathway (shape: (2,))
+        :param w2: Fusion weights for the bottom-up pathway (shape: (3,))
+        """
+        p3_x, p4_x, p5_x = inputs  # Extract input features
 
-        # Normalize weights
-        w1 = F.softmax(self.w1, dim=0)
-        w2 = F.softmax(self.w2, dim=0)
-
-        # Top-down pathway
+        # Top-down pathway fusion
         p5_td = p5_x  # No changes needed for P5
-        p4_td = self.p4_td(self._weighted_fusion([p4_x, F.interpolate(p5_td, scale_factor=2, mode="nearest")], w1[:, 0]))
-        p3_td = self.p3_td(self._weighted_fusion([p3_x, F.interpolate(p4_td, scale_factor=2, mode="nearest")], w1[:, 1]))
+        p4_td = self.p4_td(self._weighted_fusion(
+            [p4_x, F.interpolate(p5_td, scale_factor=2, mode="nearest")], w1
+        ))
+        p3_td = self.p3_td(self._weighted_fusion(
+            [p3_x, F.interpolate(p4_td, scale_factor=2, mode="nearest")], w1
+        ))
 
-        # Bottom-up pathway
-        p3_out = p3_td
+        # Bottom-up pathway fusion
+        p3_out = self.p3_out(p3_td)  # ✅ Processed through DepthwiseConvBlock
         p4_out = self.p4_out(self._weighted_fusion(
-            [p4_x, p4_td, F.interpolate(p3_out, scale_factor=0.5, mode="nearest")], w2[:, 0]
+            [p4_x, p4_td, F.interpolate(p3_out, scale_factor=0.5, mode="nearest")], w2
         ))
         p5_out = self.p5_out(self._weighted_fusion(
-            [p5_x, p5_td, F.interpolate(p4_out, scale_factor=0.5, mode="nearest")], w2[:, 1]
+            [p5_x, p5_td, F.interpolate(p4_out, scale_factor=0.5, mode="nearest")], w2
         ))
 
-        return [p3_out, p4_out, p5_out]  # Only 3 outputs (p3, p4, p5)
+        return p3_out, p4_out, p5_out  # ✅ Return processed outputs
