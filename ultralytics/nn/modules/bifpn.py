@@ -56,4 +56,4 @@ class BiFPN(nn.Module):
         p4_out = self.p4_out(p4)
         p5_out = self.p5_out(p5)
 
-    return p5_out, p4_out, p3_out  # Reverse output order
+        return p5_out, p4_out, p3_out  # Reverse output order
