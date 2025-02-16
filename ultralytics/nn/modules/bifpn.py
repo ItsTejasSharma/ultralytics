@@ -37,29 +37,29 @@ class BiFPN(nn.Module):
         weighted_sum = sum(w * f for w, f in zip(weights, features))  # Weighted sum
         return weighted_sum / (weights.sum() + self.epsilon)  # Normalize with epsilon
 
-def forward(self, inputs):
-    p3, p4, p5 = inputs  # Extract input features
-
-    # Apply 1x1 convolutions to normalize input channels
-    p3 = self.p3_in(p3)
-    p4 = self.p4_in(p4)
-    p5 = self.p5_in(p5)
-
-    # Optional: Add assertion after normalization if needed
-    assert p3.shape[1] == p4.shape[1] == p5.shape[1], "Channel mismatch after convs"
-
-    # Apply additional processing convolutions (if any)
-    p3 = self.p3_conv(p3)
-    p4 = self.p4_conv(p4)
-    p5 = self.p5_conv(p5)
-
-    # Pass through BiFPN layers iteratively
-    for i, bifpn_block in enumerate(self.bifpn_blocks):
-        p3, p4, p5 = bifpn_block(p3, p4, p5, self.w1[i], self.w2[i])  # Pass per-layer weights
-
-    # Apply final processing convolutions
-    p3_out = self.p3_out(p3)
-    p4_out = self.p4_out(p4)
-    p5_out = self.p5_out(p5)
-
-    return p5_out, p4_out, p3_out  # Reverse output order
+    def forward(self, inputs):
+        p3, p4, p5 = inputs  # Extract input features
+    
+        # Apply 1x1 convolutions to normalize input channels
+        p3 = self.p3_in(p3)
+        p4 = self.p4_in(p4)
+        p5 = self.p5_in(p5)
+    
+        # Optional: Add assertion after normalization if needed
+        assert p3.shape[1] == p4.shape[1] == p5.shape[1], "Channel mismatch after convs"
+    
+        # Apply additional processing convolutions (if any)
+        p3 = self.p3_conv(p3)
+        p4 = self.p4_conv(p4)
+        p5 = self.p5_conv(p5)
+    
+        # Pass through BiFPN layers iteratively
+        for i, bifpn_block in enumerate(self.bifpn_blocks):
+            p3, p4, p5 = bifpn_block(p3, p4, p5, self.w1[i], self.w2[i])  # Pass per-layer weights
+    
+        # Apply final processing convolutions
+        p3_out = self.p3_out(p3)
+        p4_out = self.p4_out(p4)
+        p5_out = self.p5_out(p5)
+    
+        return p5_out, p4_out, p3_out  # Reverse output order
