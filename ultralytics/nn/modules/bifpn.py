@@ -27,11 +27,11 @@ class BiFPN(nn.Module):
 
         # 4. Weight Initialization
         self.w1 = nn.ParameterList([
-            nn.Parameter(torch.ones(2, dtype=torch.float32)  # Top-down path weights
+            nn.Parameter(torch.ones(2, dtype=torch.float32),  # Top-down path weights
             for _ in range(num_layers)
         ])
         self.w2 = nn.ParameterList([
-            nn.Parameter(torch.ones(3, dtype=torch.float32)  # Bottom-up path weights
+            nn.Parameter(torch.ones(3, dtype=torch.float32),  # Bottom-up path weights
             for _ in range(num_layers)
         ])
 
