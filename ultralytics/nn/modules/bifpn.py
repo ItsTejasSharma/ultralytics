@@ -39,7 +39,7 @@ class BiFPN(nn.Module):
 
     def forward(self, inputs):
         p3, p4, p5 = inputs  # Extract input features
-         assert p3.shape[1] == p4.shape[1] == p5.shape[1], \
+        assert p3.shape[1] == p4.shape[1] == p5.shape[1], \
             f"Input channel mismatch: {p3.shape[1]} vs {p4.shape[1]} vs {p5.shape[1]}"
         # Apply 1x1 convolutions to normalize input channels
         p3 = self.p3_conv(p3)
