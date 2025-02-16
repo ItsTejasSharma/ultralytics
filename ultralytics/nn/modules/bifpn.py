@@ -26,6 +26,11 @@ class BiFPN(nn.Module):
         self.p4_out = nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1, padding=0)
         self.p5_out = nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
+        # Initialize fusion weights properly
+        for layer_idx in range(num_layers):
+            nn.init.constant_(self.w1[layer_idx], 1.0)
+            nn.init.constant_(self.w2[layer_idx], 1.0)
+
     def _weighted_fusion(self, features, weights):
         """Helper function for weighted feature fusion."""
         weights = F.softmax(weights, dim=0)  # Normalize weights
