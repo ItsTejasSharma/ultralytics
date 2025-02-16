@@ -1227,10 +1227,10 @@ class BiFPNBlock(nn.Module):
         self.p5_out = DepthwiseConvBlock(feature_size, feature_size)
 
     def _weighted_fusion(self, features, weights):
-        """Helper function for weighted feature fusion."""
-        weights = F.softmax(weights, dim=0)  # Normalize weights
-        weighted_sum = sum(w * f for w, f in zip(weights, features))  # Weighted sum
-        return weighted_sum / (weights.sum() + self.epsilon)  # Normalize with epsilon
+        """Fast normalized fusion from BiFPN paper"""
+        weights = F.relu(weights)
+        weights_sum = weights.sum(dim=0) + self.epsilon
+        return sum(w * f for w, f in zip(weights, features)) / weights_sum
 
     def forward(self, inputs, w1, w2):
         """
